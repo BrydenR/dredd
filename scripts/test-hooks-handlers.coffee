@@ -27,21 +27,19 @@
 #   3. This script...
 #       1. makes sure it is ran for just one build job within the build matrix.
 #       2. checks whether hook handler integration tests were triggered or not.
-#          **If the tested commit has tag or its commit message contains words
-#          "tests hook handlers", it continues.** Otherwise it skips the tests
-#          (ends immediately with 0 exit status code).
+#          **If the tested commit is part of PR or its commit message contains
+#          words "tests hook handlers", it continues.** Otherwise it skips
+#          the tests (ends immediately with 0 exit status code).
 #       3. creates special dependent integration branches for each hook handler
 #          implementation. In these branches, it takes whatever is in master
 #          branch of the hook handler repository with the only difference that
 #          instead of `npm i -g dredd` it links the Dredd from currently tested
 #          commit.
 #       4. pushes these dependent branches to GitHub, which triggers dependent
-#          Travis CI builds.
-#       5. polls for results of the dependent Travis CI builds.
-#       6. evaluates results of dependent builds and if any of them didn't pass,
-#          the script exits with non-zero code.
-#       7. makes sure it deletes the dependent git branches from GitHub before
-#          exiting.
+#          Travis CI builds. If dependent build would run in a build matrix,
+#          selects language version with the highest number.
+#       5. if the tests were triggered by PR, every dependent build informs
+#          the PR about the result and if it passed, it deletes its branch
 #
 # Known issues:
 #   * If `master` branch of hook handler repository becomes red, this whole
@@ -56,6 +54,7 @@ execSync = require('sync-exec')
 {exec} = require('child_process')
 async = require('async')
 yaml = require('js-yaml')
+request = require('request')
 
 
 unless process.env.CI
@@ -71,22 +70,28 @@ unless process.env.CI
 ################################################################################
 
 JOBS = [
-    name: 'ruby-hooks-handler'
-    repo: 'https://github.com/apiaryio/dredd-hooks-ruby.git'
-  ,
+  #   name: 'ruby-hooks-handler'
+  #   repo: 'https://github.com/apiaryio/dredd-hooks-ruby.git'
+  #   matrix: 'rvm'
+  # ,
     name: 'python-hooks-handler'
     repo: 'https://github.com/apiaryio/dredd-hooks-python.git'
-  ,
-    name: 'php-hooks-handler'
-    repo: 'https://github.com/ddelnano/dredd-hooks-php.git'
-  ,
-    name: 'perl-hooks-handler'
-    repo: 'https://github.com/ungrim97/Dredd-Hooks.git'
-  ,
-    name: 'go-hooks-handler'
-    repo: 'https://github.com/snikch/goodman.git'
+    matrix: 'python'
+  # ,
+  #   name: 'php-hooks-handler'
+  #   repo: 'https://github.com/ddelnano/dredd-hooks-php.git'
+  #   matrix: 'php'
+  # ,
+  #   name: 'perl-hooks-handler'
+  #   repo: 'https://github.com/ungrim97/Dredd-Hooks.git'
+  #   matrix: 'perl'
+  # ,
+  #   name: 'go-hooks-handler'
+  #   repo: 'https://github.com/snikch/goodman.git'
+  #   matrix: 'go'
 ]
 
+TRAVIS_CONFIG_FILE = '.travis.yml'
 TRIGGER_KEYWORD = 'tests hook handlers' # inspired by https://help.github.com/articles/closing-issues-via-commit-messages/
 LINKED_DREDD_DIR = './__dredd__'
 RE_DREDD_INSTALL_CMD = /npm ([ \-=\w]+ )?i(nstall)? ([ \-=\w]+ )?dredd/
@@ -129,46 +134,13 @@ buildFindExcludes = (excludedPaths) ->
 
 # Replaces given pattern with replacement in given file. Returns boolean whether
 # any changes were made.
-replaceInFile = (file, pattern, replacement) ->
-  contents = fs.readFileSync(file, 'utf-8')
-  unless contents.match(pattern)
+replaceDreddInstallation = ->
+  contents = fs.readFileSync(TRAVIS_CONFIG_FILE, 'utf-8')
+  unless contents.match(RE_DREDD_INSTALL_CMD)
     return false
-  contents = contents.replace(pattern, replacement)
-  fs.writeFileSync(file, contents, 'utf-8')
+  contents = contents.replace(RE_DREDD_INSTALL_CMD, DREDD_LINK_CMD)
+  fs.writeFileSync(TRAVIS_CONFIG_FILE, contents, 'utf-8')
   return true
-
-
-# Waits until the latest Travis CI build finishes on given Dredd's Git branch.
-# Provides status in the callback (should be either 'errored' or 'passed', but
-# who knows).
-pollForBuildResult = (branch, callback) ->
-  command = """travis history \
-    --repo apiaryio/dredd \
-    --branch #{branch} \
-    --limit 1 \
-    --no-interactive
-  """
-
-  process.stdout.write('.') # poor man's progress bar
-  exec(command, (err, stdout) ->
-    return callback(err) if err
-
-    status = parseBuildStatus(stdout)
-    if status not in ['created', 'started']
-      return callback(null, status)
-
-    setTimeout( ->
-      pollForBuildResult(branch, callback)
-    , 120000)
-  )
-
-
-# Takes output of 'travis history' command (see
-# https://github.com/travis-ci/travis.rb#history) and parses out build status.
-parseBuildStatus = (stdout) ->
-  stdout = stdout.toString() if Buffer.isBuffer(stdout)
-  match = stdout.match(/^#\d+ (\w+):/)
-  match[1]
 
 
 # Exits the script in case Travis CI CLI isn't installed.
@@ -189,8 +161,8 @@ ensureGitAuthor = ->
   execSync("git config user.email '#{email}'")
 
 
-# Adds remote origin URL with GitHub token so the script is able to could push
-# to the Dredd repository. GitHub token is encrypted in Dredd's .travis.yml.
+# Adds remote origin URL with GitHub token so the script could push to the Dredd
+# repository. GitHub token is encrypted in Dredd's .travis.yml.
 ensureGitOrigin = ->
   if process.env.GITHUB_TOKEN
     console.log('Applying GitHub token.')
@@ -204,19 +176,38 @@ cleanGit = (branch) ->
   execSync('git reset HEAD --hard')
 
 
-# Deletes given branches both locally and remotely on GitHub.
-deleteGitBranches = (branches) ->
-  for branch in branches
-    console.log("Deleting #{branch} from GitHub...")
-    execSync('git branch -D ' + branch)
-    execSync("git push origin -f --delete #{branch} #{DROP_OUTPUT}")
+# # Deletes given branches both locally and remotely on GitHub.
+# deleteGitBranches = (branches) ->
+#   for branch in branches
+#     console.log("Deleting #{branch} from GitHub...")
+#     execSync('git branch -D ' + branch)
+#     execSync("git push origin -f --delete #{branch} #{DROP_OUTPUT}")
 
 
-# Lists Node versions defined in the .travis.yml config file.
-listTestedNodeVersions = ->
-  contents = fs.readFileSync('.travis.yml')
+# Returns the latest tested Node.js version defined in the .travis.yml
+# config file.
+getLatestTestedNodeVersion = ->
+  contents = fs.readFileSync(TRAVIS_CONFIG_FILE)
   config = yaml.safeLoad(contents)
-  return config.node_js
+
+  versions = config.node_js
+  versions.sort((v1, v2) -> v2 - v1)
+  return versions[0]
+
+
+# Takes language version matrix in the .travis.yml config file and reduces
+# it to just one language version. It chooses the one which represents
+# the highest floating point number. If there is no version like that, it
+# selects the first specified version.
+reduceTestedVersions = (matrixName) ->
+  contents = fs.readFileSync(TRAVIS_CONFIG_FILE)
+  config = yaml.safeLoad(contents)
+
+  reduced = config[matrixName].map((version) -> parseFload(version))
+  reduced.sort((v1, v2) -> v2 - v1)
+  config[matrixName] = reduced[0] or config[matrixName][0]
+
+  fs.writeFileSync(TRAVIS_CONFIG_FILE, yaml.dump(config), 'utf-8')
 
 
 # Retrieves full commit message.
@@ -224,18 +215,9 @@ getGitCommitMessage = (commitHash) ->
   getTrimmedStdout(execSync('git log --format=%B -n 1 ' + commitHash))
 
 
-# Returns tag name if given commit is tagged. TRAVIS_TAG environment variable
-# is present only in special builds Travis CI starts separately for new tags.
-getGitCommitTag = (commitHash) ->
-  return process.env.TRAVIS_TAG if process.env.TRAVIS_TAG
-  latestTag = getTrimmedStdout(execSync('git describe --abbrev=0 --tags'))
-  taggedCommit = getTrimmedStdout(execSync('git rev-list -n 1 ' + latestTag))
-  return latestTag if commitHash is taggedCommit
-
-
 # Aborts this script in case it finds out that conditions to run this script
 # are not satisfied. The script should run only if it was triggered by the
-# tested commit being tagged or by a keyword in the commit message.
+# tested commit being part of PR or by a keyword in the commit message.
 abortIfNotTriggered = ->
   reason = null
 
@@ -244,46 +226,27 @@ abortIfNotTriggered = ->
   # the dependent builds will be performed on the default version Travis CI
   # provides anyway (.travis.yml of dependent repositories usually do not
   # specify node version, they care about Ruby, Python, ... versions).
-  nodeVersionTestedAsFirst = listTestedNodeVersions()[0]
-  if process.env.TRAVIS_NODE_VERSION isnt nodeVersionTestedAsFirst
-    reason = "They run only in builds with Node #{nodeVersionTestedAsFirst}."
+  latestTestedNodeVersion = getLatestTestedNodeVersion()
+  if process.env.TRAVIS_NODE_VERSION isnt latestTestedNodeVersion
+    reason = "They run only in builds with Node #{latestTestedNodeVersion}."
   else
-    # Integration tests are triggered only if the tested commit is tagged or
+    # Integration tests are triggered only if the tested commit is in PR or
     # it's message contains trigger keyword. If this is not the case, abort
     # the script.
     commitHash = process.env.TRAVIS_COMMIT
-    tag = getGitCommitTag(commitHash)
     message = getGitCommitMessage(commitHash)
 
-    if tag
-      console.log("Tested commit (#{commitHash}) is tagged as '#{tag}'.")
+    if pullRequestId
+      console.log("Tested commit (#{commitHash}) is part of the '##{pullRequestId}' PR.")
     else if message.toLowerCase().indexOf(TRIGGER_KEYWORD) isnt -1
       console.log("Message of tested commit (#{commitHash}) contains '#{TRIGGER_KEYWORD}'.")
     else
-      reason = "Tested commit (#{commitHash}) isn't tagged and its message doesn't contain keyword '#{TRIGGER_KEYWORD}'."
+      reason = "Tested commit (#{commitHash}) isn't part of PR and its message doesn't contain keyword '#{TRIGGER_KEYWORD}'."
 
   # There is a reason to abort the script, so let's do it.
   if reason
     console.error('Skipping integration tests of hook handlers. ' + reason)
     process.exit(0)
-
-
-# Waits for results from dependent builds. Its callback gets results in form
-# of object where keys are integration branches and values are resulting build
-# statuses.
-waitForResults = (integrationBranches, callback) ->
-  # Waiting 2 minutes at the beginning so Travis CI has time to pick up
-  # dependent builds from GitHub.
-  setTimeout( ->
-    polling = {}
-    integrationBranches.forEach((branch) ->
-      polling[branch] = (next) -> pollForBuildResult(branch, next)
-    )
-    async.parallel(polling, (err, results) ->
-      console.log('\n') # 'pollForBuildResult' prints dots without newline
-      callback(err, results)
-    )
-  , 120000)
 
 
 ################################################################################
@@ -300,11 +263,14 @@ ensureGitOrigin()
 
 integrationBranches = []
 testedBranch = process.env.TRAVIS_BRANCH
+testedCommit = process.env.TRAVIS_COMMIT_RANGE.split('...')[1]
 buildId = process.env.TRAVIS_BUILD_ID
+pullRequestId = if process.env.TRAVIS_PULL_REQUEST isnt 'false' then process.env.TRAVIS_PULL_REQUEST else null
 
 
-JOBS.forEach(({name, repo}) ->
-  integrationBranch = "dependent-build/#{buildId}/#{name}"
+JOBS.forEach(({name, repo, matrix}) ->
+  id = if pullRequestId then "pr#{pullRequestId}/#{buildId}" else buildId
+  integrationBranch = "dependent-build/#{id}/#{name}"
   integrationBranches.push(integrationBranch)
   console.log("Preparing branch #{integrationBranch}...")
 
@@ -315,7 +281,7 @@ JOBS.forEach(({name, repo}) ->
   # Move contents of the root directory to the directory for linked Dredd and
   # commit this change.
   moveAllFilesTo(LINKED_DREDD_DIR, ['./.git', './.git/*'])
-  execSync('git add -A && git commit -m "Moving Dredd to directory."')
+  execSync('git add -A && git commit -m "chore: Moving Dredd to directory"')
 
   # Add Git remote with the repository being integrated. Merge its master
   # branch with what's in current branch. After this, we have contents of the
@@ -325,33 +291,34 @@ JOBS.forEach(({name, repo}) ->
 
   # Replace installation of Dredd in .travis.yml with a command which links
   # Dredd from the directory we created. Commit the change.
-  unless replaceInFile('.travis.yml', RE_DREDD_INSTALL_CMD, DREDD_LINK_CMD)
+  unless replaceDreddInstallation()
     console.error('Could not find Dredd installation command in .travis.yml.', contents)
     process.exit(1)
-  execSync('git commit -am "Using linked Dredd."')
+
+  # Keep just the latest language version in the build matrix.
+  reduceTestedVersions(matrix)
+
+  # Enhance the build configuration so it reports results back to PR and deletes
+  # the branch afterwards.
+  if pullRequestId
+    execSync("travis encrypt GITHUB_TOKEN=#{process.env.GITHUB_TOKEN} --add #{DROP_OUTPUT}")
+    request.post(
+      url: 'https://api.github.com/repos/apiaryio/dredd/statuses/' + testedCommit
+      headers:
+        authorization: "token #{process.env.GITHUB_TOKEN}"
+      body:
+        state: 'pending'
+        description: "The dependent build has been created"
+        context: "continuous-integration/travis-ci/#{name}"
+      json: true
+    )
+    # TRAVIS_TEST_RESULT=0 (success) / TRAVIS_TEST_RESULT=1 (broken)
+
+  # Commit the changes.
+  execSync('git commit -am "chore: Adjusted build configuration"')
 
   # Push the integration branch to GitHub and clean the repository.
   console.log("Pushing #{integrationBranch} to GitHub...")
   execSync("git push origin #{integrationBranch} -f #{DROP_OUTPUT}")
   cleanGit(testedBranch)
-)
-
-
-# Poll for results and evaluate them.
-console.log("Waiting for dependent builds...")
-waitForResults(integrationBranches, (err, results) ->
-  console.log('All dependent builds finished!')
-
-  if err
-    console.error(err.message, err)
-    deleteGitBranches(integrationBranches)
-    process.exit(1)
-
-  failed = false
-  for own integrationBranch, result of results
-    console.log("* #{integrationBranch}: #{result}")
-    failed = true if result isnt 'passed'
-
-  deleteGitBranches(integrationBranches)
-  process.exit(if failed then 1 else 0)
 )
