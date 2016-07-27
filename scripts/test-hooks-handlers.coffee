@@ -261,6 +261,9 @@ ensureGitAuthor()
 ensureGitOrigin()
 
 
+console.log process.env.TRAVIS_PULL_REQUEST
+
+
 integrationBranches = []
 testedBranch = process.env.TRAVIS_BRANCH
 testedCommit = process.env.TRAVIS_COMMIT_RANGE.split('...')[1]
