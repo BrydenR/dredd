@@ -1,25 +1,27 @@
-sudo: "required"
-dist: "trusty"
+sudo: false
+# sudo: "required"
+# dist: "trusty"
 language: "node_js"
 env:
   global:
     - secure: "STxhfQh/AHeyRJgErinjZrjnJDChHKLctjqAUDwiIWcZZonopfB8DNp6DgcCHj6FPCTfcHeWdjQjvOiC6ZZugMcMUwzhi+PdDR4kDVP3GoeaMcKC2ckkdjapcA+mnmJDLF35FjhK6PvR1zpRbwlwiYpIayKHEjdgEzna3RmfRH8="
-  matrix:
-    - "DRAFTER=JS"
-    - "DRAFTER=CPP"
+  # matrix:
+  #   - "DRAFTER=JS"
+  #   - "DRAFTER=CPP"
 node_js:
-  - "0.10"
-  - "0.12"
-  - "4"
+  # - "0.10"
+  # - "0.12"
+  # - "4"
   - "6"
-before_install:
-  - "npm -g install npm@latest"
-  - "gem install travis"
-before_script:
-  - "npm run lint"
+# before_install:
+#   - "npm -g install npm@latest"
+#   - "gem install travis"
+# before_script:
+#   - "npm run lint"
 script:
-  - "if [[ $DRAFTER = JS ]]; then find ./node_modules -name protagonist -type d -exec rm -rf {} +; fi"
-  - "npm test"
-  - "if [[ $DRAFTER = JS && $TRAVIS_PULL_REQUEST = false ]]; then npm run test:hooks-handlers; fi"
-after_success:
-  - "npm run coveralls"
+  # - "if [[ $DRAFTER = JS ]]; then find ./node_modules -name protagonist -type d -exec rm -rf {} +; fi"
+  # - "npm test"
+  # - "if [[ $DRAFTER = JS ]]; then npm run test:hooks-handlers; fi"
+  - npm run test:hooks-handlers
+# after_success:
+#   - "npm run coveralls"
