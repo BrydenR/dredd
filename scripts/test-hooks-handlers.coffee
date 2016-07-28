@@ -123,7 +123,7 @@ moveAllFilesTo = (directory, excludedPaths = []) ->
   execSync('mkdir ' + directory)
 
   excludes = buildFindExcludes(excludedPaths)
-  execSync("find . #{excludes} -exec mv -t '#{directory}' '{}' + #{DROP_OUTPUT}")
+  execSync("find . #{excludes} -exec mv -t '#{directory}' '{}' +") # #{DROP_OUTPUT}
 
 
 # Takes ['./a', './b'] and produces "-not -path './a' -and -not -path './b'"
