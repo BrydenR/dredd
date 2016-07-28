@@ -124,6 +124,8 @@ moveAllFilesTo = (directory, excludedPaths = []) ->
   execSync('mkdir ' + directory)
 
   excludes = buildFindExcludes(excludedPaths)
+
+  # TODO WHY THE HELL EVERYTHING IS MOVED EXCEPT OF .TRAVIS.YML?!!
   console.log('find', execSync("find . #{excludes}").stdout)
   execSync("find . #{excludes} -exec mv -t '#{directory}' '{}' + #{DROP_OUTPUT}")
 
