@@ -218,7 +218,7 @@ getGitCommitMessage = (commitHash) ->
 # Aborts this script in case it finds out that conditions to run this script
 # are not satisfied. The script should run only if it was triggered by the
 # tested commit being part of PR or by a keyword in the commit message.
-abortIfNotTriggered = ->
+abortIfNotTriggered = (testedNodeVersion, testedCommit, pullRequestId) ->
   reason = null
 
   # We do not want to run integration tests of hook handlers for every node
@@ -227,21 +227,20 @@ abortIfNotTriggered = ->
   # provides anyway (.travis.yml of dependent repositories usually do not
   # specify node version, they care about Ruby, Python, ... versions).
   latestTestedNodeVersion = getLatestTestedNodeVersion()
-  if process.env.TRAVIS_NODE_VERSION isnt latestTestedNodeVersion
+  if testedNodeVersion isnt latestTestedNodeVersion
     reason = "They run only in builds with Node #{latestTestedNodeVersion}."
   else
     # Integration tests are triggered only if the tested commit is in PR or
     # it's message contains trigger keyword. If this is not the case, abort
     # the script.
-    commitHash = process.env.TRAVIS_COMMIT
-    message = getGitCommitMessage(commitHash)
+    message = getGitCommitMessage(testedCommit)
 
     if pullRequestId
-      console.log("Tested commit (#{commitHash}) is part of the '##{pullRequestId}' PR.")
+      console.log("Tested commit (#{testedCommit}) is part of the '##{pullRequestId}' PR.")
     else if message.toLowerCase().indexOf(TRIGGER_KEYWORD) isnt -1
-      console.log("Message of tested commit (#{commitHash}) contains '#{TRIGGER_KEYWORD}'.")
+      console.log("Message of tested commit (#{testedCommit}) contains '#{TRIGGER_KEYWORD}'.")
     else
-      reason = "Tested commit (#{commitHash}) isn't part of PR and its message doesn't contain keyword '#{TRIGGER_KEYWORD}'."
+      reason = "Tested commit (#{testedCommit}) isn't part of PR and its message doesn't contain keyword '#{TRIGGER_KEYWORD}'."
 
   # There is a reason to abort the script, so let's do it.
   if reason
@@ -253,22 +252,21 @@ abortIfNotTriggered = ->
 ##                                   MAIN                                     ##
 ################################################################################
 
-abortIfNotTriggered()
+
+integrationBranches = []
+testedNodeVersion = process.env.TRAVIS_NODE_VERSION
+testedBranch = process.env.TRAVIS_BRANCH
+testedCommit = process.env.TRAVIS_COMMIT_RANGE.split('...')[1]
+buildId = process.env.TRAVIS_BUILD_ID
+pullRequestId = if process.env.TRAVIS_PULL_REQUEST isnt 'false' then process.env.TRAVIS_PULL_REQUEST else null
+
+
+abortIfNotTriggered(testedNodeVersion, testedCommit, pullRequestId)
 requireTravisCli()
 
 
 ensureGitAuthor()
 ensureGitOrigin()
-
-
-console.log process.env.TRAVIS_PULL_REQUEST
-
-
-integrationBranches = []
-testedBranch = process.env.TRAVIS_BRANCH
-testedCommit = process.env.TRAVIS_COMMIT_RANGE.split('...')[1]
-buildId = process.env.TRAVIS_BUILD_ID
-pullRequestId = if process.env.TRAVIS_PULL_REQUEST isnt 'false' then process.env.TRAVIS_PULL_REQUEST else null
 
 
 JOBS.forEach(({name, repo, matrix}) ->

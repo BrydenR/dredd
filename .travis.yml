@@ -22,7 +22,6 @@ script:
   # - "if [[ $DRAFTER = JS ]]; then find ./node_modules -name protagonist -type d -exec rm -rf {} +; fi"
   # - "npm test"
   # - "if [[ $DRAFTER = JS ]]; then npm run test:hooks-handlers; fi"
-  - echo "$TRAVIS_PULL_REQUEST"
   - npm run test:hooks-handlers
 # after_success:
 #   - "npm run coveralls"
