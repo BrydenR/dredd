@@ -200,24 +200,20 @@ getLatestTestedNodeVersion = ->
 # the highest floating point number. If there is no version like that, it
 # selects the first specified version.
 reduceTestedVersions = (matrixName) ->
-  try
-    console.log('reduce1')
-    contents = fs.readFileSync(TRAVIS_CONFIG_FILE)
-    console.log('reduce2')
-    config = yaml.safeLoad(contents)
+  console.log('reduce1')
+  contents = fs.readFileSync(TRAVIS_CONFIG_FILE)
+  console.log('reduce2', contents)
+  config = yaml.safeLoad(contents)
 
-    console.log('reduce3')
-    reduced = config[matrixName].map((version) -> parseFload(version))
-    console.log('reduce4')
-    reduced.sort((v1, v2) -> v2 - v1)
-    console.log('reduce5')
-    config[matrixName] = reduced[0] or config[matrixName][0]
+  console.log('reduce3')
+  reduced = config[matrixName].map((version) -> parseFload(version))
+  console.log('reduce4')
+  reduced.sort((v1, v2) -> v2 - v1)
+  console.log('reduce5')
+  config[matrixName] = reduced[0] or config[matrixName][0]
 
-    console.log('reduce6')
-    fs.writeFileSync(TRAVIS_CONFIG_FILE, yaml.dump(config), 'utf-8')
-  catch e
-    console.error(e.message, e)
-    process.exit(1)
+  console.log('reduce6')
+  fs.writeFileSync(TRAVIS_CONFIG_FILE, yaml.dump(config), 'utf-8')
 
 
 # Retrieves full commit message.
@@ -291,7 +287,7 @@ JOBS.forEach(({name, repo, matrix}) ->
 
   # Move contents of the root directory to the directory for linked Dredd and
   # commit this change.
-  moveAllFilesTo(LINKED_DREDD_DIR, ['./.git', './.git/*', './scripts/test-hooks-handlers.coffee'])
+  moveAllFilesTo(LINKED_DREDD_DIR, ['./.git', './.git/*', './scripts/*'])
   execSync('git add -A && git commit -m "chore: Moving Dredd to directory"')
 
   # Add Git remote with the repository being integrated. Merge its master
@@ -308,6 +304,8 @@ JOBS.forEach(({name, repo, matrix}) ->
 
   # Keep just the latest language version in the build matrix.
   console.log(8)
+  execSync('ls -al')
+  execSync('ls ./scripts -al')
   reduceTestedVersions(matrix)
 
   # Enhance the build configuration so it reports results back to PR and deletes
