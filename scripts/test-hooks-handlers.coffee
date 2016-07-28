@@ -116,6 +116,7 @@ getTrimmedStdout = (execSyncResult) ->
 # Moves contents of the root directory to given directory. Ignores given
 # excluded paths.
 moveAllFilesTo = (directory, excludedPaths = []) ->
+  console.log('moveAllFilesTo', directory, excludedPaths)
   excludedPaths.push(directory)
 
   # Make sure directory exists and is empty.
@@ -123,7 +124,8 @@ moveAllFilesTo = (directory, excludedPaths = []) ->
   execSync('mkdir ' + directory)
 
   excludes = buildFindExcludes(excludedPaths)
-  execSync("find . #{excludes} -exec mv -t '#{directory}' '{}' +") # #{DROP_OUTPUT}
+  console.log("find . #{excludes} -exec mv -t '#{directory}' '{}' +")
+  execSync("find . #{excludes} -exec mv -t '#{directory}' '{}' + #{DROP_OUTPUT}")
 
 
 # Takes ['./a', './b'] and produces "-not -path './a' -and -not -path './b'"
@@ -279,20 +281,24 @@ JOBS.forEach(({name, repo, matrix}) ->
   id = if pullRequestId then "pr#{pullRequestId}/#{buildId}" else buildId
   integrationBranch = "dependent-build/#{id}/#{name}"
   integrationBranches.push(integrationBranch)
-  console.log("Preparing branch #{integrationBranch}...")
+  console.log("Preparing branch #{integrationBranch}")
 
   # Prepare a special integration branch
+  console.log(1)
   cleanGit(testedBranch)
   execSync('git checkout -B ' + integrationBranch)
+  console.log(execSync('git branch').stdout)
 
   # Move contents of the root directory to the directory for linked Dredd and
   # commit this change.
+  console.log(2)
   moveAllFilesTo(LINKED_DREDD_DIR, ['./.git', './.git/*', './scripts/*'])
   execSync('git add -A && git commit -m "chore: Moving Dredd to directory"')
 
   # Add Git remote with the repository being integrated. Merge its master
   # branch with what's in current branch. After this, we have contents of the
   # remote repo plus one extra directory, which contains current Dredd.
+  console.log(3)
   execSync("git remote add #{name} #{repo} --fetch")
   execSync("git merge #{name}/master --no-edit")
 
