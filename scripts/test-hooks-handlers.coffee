@@ -303,8 +303,11 @@ JOBS.forEach(({name, repo, matrix}) ->
     process.exit(1)
 
   # Keep just the latest language version in the build matrix.
-  console.log(8)
+  console.log('ls: .')
   console.log(execSync('ls -al').stdout)
+  console.log('ls: __dredd__')
+  console.log(execSync('ls ./__dredd__ -al').stdout)
+  console.log('ls: scripts')
   console.log(execSync('ls ./scripts -al').stdout)
   reduceTestedVersions(matrix)
 
