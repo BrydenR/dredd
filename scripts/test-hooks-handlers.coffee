@@ -292,7 +292,7 @@ JOBS.forEach(({name, repo, matrix}) ->
   # Move contents of the root directory to the directory for linked Dredd and
   # commit this change.
   console.log(2)
-  moveAllFilesTo(LINKED_DREDD_DIR, ['./.git', './.git/*', './scripts/*'])
+  moveAllFilesTo(LINKED_DREDD_DIR, ['./.git', './.git/*', './scripts', './scripts/*'])
   execSync('git add -A && git commit -m "chore: Moving Dredd to directory"')
 
   # Add Git remote with the repository being integrated. Merge its master
