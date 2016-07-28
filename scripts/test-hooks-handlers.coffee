@@ -276,33 +276,44 @@ JOBS.forEach(({name, repo, matrix}) ->
   console.log("Preparing branch #{integrationBranch}...")
 
   # Prepare a special integration branch
+  console.log(1)
   cleanGit(testedBranch)
+  console.log(2)
   execSync('git checkout -B ' + integrationBranch)
 
   # Move contents of the root directory to the directory for linked Dredd and
   # commit this change.
+  console.log(3)
   moveAllFilesTo(LINKED_DREDD_DIR, ['./.git', './.git/*'])
+  console.log(4)
   execSync('git add -A && git commit -m "chore: Moving Dredd to directory"')
 
   # Add Git remote with the repository being integrated. Merge its master
   # branch with what's in current branch. After this, we have contents of the
   # remote repo plus one extra directory, which contains current Dredd.
+  console.log(5)
   execSync("git remote add #{name} #{repo} --fetch")
+  console.log(6)
   execSync("git merge #{name}/master --no-edit")
 
   # Replace installation of Dredd in .travis.yml with a command which links
   # Dredd from the directory we created. Commit the change.
+  console.log(7)
   unless replaceDreddInstallation()
     console.error('Could not find Dredd installation command in .travis.yml.', contents)
     process.exit(1)
 
   # Keep just the latest language version in the build matrix.
+  console.log(8)
   reduceTestedVersions(matrix)
 
   # Enhance the build configuration so it reports results back to PR and deletes
   # the branch afterwards.
+  console.log(9)
   if pullRequestId
+    console.log(10)
     execSync("travis encrypt GITHUB_TOKEN=#{process.env.GITHUB_TOKEN} --add #{DROP_OUTPUT}")
+    console.log(11)
     request.post(
       url: 'https://api.github.com/repos/apiaryio/dredd/statuses/' + testedCommit
       headers:
@@ -316,6 +327,7 @@ JOBS.forEach(({name, repo, matrix}) ->
     # TRAVIS_TEST_RESULT=0 (success) / TRAVIS_TEST_RESULT=1 (broken)
 
   # Commit the changes.
+  console.log(12)
   execSync('git commit -am "chore: Adjusted build configuration"')
 
   # Push the integration branch to GitHub and clean the repository.
