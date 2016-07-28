@@ -55,6 +55,7 @@ execSync = require('sync-exec')
 async = require('async')
 yaml = require('js-yaml')
 request = require('request')
+path = require('path')
 
 
 unless process.env.CI
@@ -91,11 +92,14 @@ JOBS = [
   #   matrix: 'go'
 ]
 
-TRAVIS_CONFIG_FILE = '.travis.yml'
+TRAVIS_CONFIG_FILE = path.resolve('.travis.yml')
 TRIGGER_KEYWORD = 'tests hook handlers' # inspired by https://help.github.com/articles/closing-issues-via-commit-messages/
 LINKED_DREDD_DIR = './__dredd__'
 RE_DREDD_INSTALL_CMD = /npm ([ \-=\w]+ )?i(nstall)? ([ \-=\w]+ )?dredd/
 DREDD_LINK_CMD = "npm link --python=python2 #{LINKED_DREDD_DIR}"
+
+
+console.log TRAVIS_CONFIG_FILE
 
 
 ################################################################################
@@ -276,29 +280,22 @@ JOBS.forEach(({name, repo, matrix}) ->
   console.log("Preparing branch #{integrationBranch}...")
 
   # Prepare a special integration branch
-  console.log(1)
   cleanGit(testedBranch)
-  console.log(2)
   execSync('git checkout -B ' + integrationBranch)
 
   # Move contents of the root directory to the directory for linked Dredd and
   # commit this change.
-  console.log(3)
   moveAllFilesTo(LINKED_DREDD_DIR, ['./.git', './.git/*'])
-  console.log(4)
   execSync('git add -A && git commit -m "chore: Moving Dredd to directory"')
 
   # Add Git remote with the repository being integrated. Merge its master
   # branch with what's in current branch. After this, we have contents of the
   # remote repo plus one extra directory, which contains current Dredd.
-  console.log(5)
   execSync("git remote add #{name} #{repo} --fetch")
-  console.log(6)
   execSync("git merge #{name}/master --no-edit")
 
   # Replace installation of Dredd in .travis.yml with a command which links
   # Dredd from the directory we created. Commit the change.
-  console.log(7)
   unless replaceDreddInstallation()
     console.error('Could not find Dredd installation command in .travis.yml.', contents)
     process.exit(1)
