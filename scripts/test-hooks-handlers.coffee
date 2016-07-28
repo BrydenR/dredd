@@ -124,7 +124,7 @@ moveAllFilesTo = (directory, excludedPaths = []) ->
   execSync('mkdir ' + directory)
 
   excludes = buildFindExcludes(excludedPaths)
-  console.log(execSync("find . #{excludes} -exec mv -t '#{directory}' '{}' +").stdout)
+  console.log('find', execSync("find . #{excludes}").stdout)
   execSync("find . #{excludes} -exec mv -t '#{directory}' '{}' + #{DROP_OUTPUT}")
 
 
