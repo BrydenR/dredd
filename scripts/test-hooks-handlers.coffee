@@ -202,7 +202,7 @@ getLatestTestedNodeVersion = ->
 reduceTestedVersions = (matrixName) ->
   console.log('reduce1')
   contents = fs.readFileSync(TRAVIS_CONFIG_FILE)
-  console.log('reduce2', contents)
+  console.log('reduce2', contents.toString())
   config = yaml.safeLoad(contents)
 
   console.log('reduce3')
@@ -304,8 +304,8 @@ JOBS.forEach(({name, repo, matrix}) ->
 
   # Keep just the latest language version in the build matrix.
   console.log(8)
-  execSync('ls -al')
-  execSync('ls ./scripts -al')
+  console.log(execSync('ls -al').stdout)
+  console.log(execSync('ls ./scripts -al').stdout)
   reduceTestedVersions(matrix)
 
   # Enhance the build configuration so it reports results back to PR and deletes
