@@ -55,7 +55,6 @@ execSync = require('sync-exec')
 async = require('async')
 yaml = require('js-yaml')
 request = require('request')
-path = require('path')
 
 
 unless process.env.CI
@@ -92,14 +91,11 @@ JOBS = [
   #   matrix: 'go'
 ]
 
-TRAVIS_CONFIG_FILE = path.resolve('.travis.yml')
+TRAVIS_CONFIG_FILE = '.travis.yml'
 TRIGGER_KEYWORD = 'tests hook handlers' # inspired by https://help.github.com/articles/closing-issues-via-commit-messages/
 LINKED_DREDD_DIR = './__dredd__'
 RE_DREDD_INSTALL_CMD = /npm ([ \-=\w]+ )?i(nstall)? ([ \-=\w]+ )?dredd/
 DREDD_LINK_CMD = "npm link --python=python2 #{LINKED_DREDD_DIR}"
-
-
-console.log TRAVIS_CONFIG_FILE
 
 
 ################################################################################
@@ -285,7 +281,7 @@ JOBS.forEach(({name, repo, matrix}) ->
 
   # Move contents of the root directory to the directory for linked Dredd and
   # commit this change.
-  moveAllFilesTo(LINKED_DREDD_DIR, ['./.git', './.git/*'])
+  moveAllFilesTo(LINKED_DREDD_DIR, ['./.git', './.git/*', './scripts/test-hooks-handlers.coffee'])
   execSync('git add -A && git commit -m "chore: Moving Dredd to directory"')
 
   # Add Git remote with the repository being integrated. Merge its master
