@@ -294,6 +294,7 @@ JOBS.forEach(({name, repo, matrix}) ->
   # Move contents of the root directory to the directory for linked Dredd and
   # commit this change.
   console.log(2)
+  execSync('rm -rf ./node_modules')
   moveAllFilesTo(LINKED_DREDD_DIR, ['./.git', './.git/*', './scripts', './scripts/*'])
   execSync('git add -A && git commit -m "chore: Moving Dredd to directory"')
 
