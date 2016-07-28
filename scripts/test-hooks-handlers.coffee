@@ -151,12 +151,12 @@ requireTravisCli = ->
 
 
 # If Git author is empty, sets the commiter of the last commit as an author.
-ensureGitAuthor = ->
-  name = getTrimmedStdout(execSync('git show --format="%cN" -s'))
+ensureGitAuthor = (testedCommit) ->
+  name = getTrimmedStdout(execSync('git show --format="%cN" -s ' + testedCommit))
   console.log("Setting Git user name to '#{name}'.")
   execSync("git config user.name '#{name}'")
 
-  email = getTrimmedStdout(execSync('git show --format="%cE" -s'))
+  email = getTrimmedStdout(execSync('git show --format="%cE" -s ' + testedCommit))
   console.log("Setting Git e-mail to '#{email}'.")
   execSync("git config user.email '#{email}'")
 
@@ -200,14 +200,24 @@ getLatestTestedNodeVersion = ->
 # the highest floating point number. If there is no version like that, it
 # selects the first specified version.
 reduceTestedVersions = (matrixName) ->
-  contents = fs.readFileSync(TRAVIS_CONFIG_FILE)
-  config = yaml.safeLoad(contents)
+  try
+    console.log('reduce1')
+    contents = fs.readFileSync(TRAVIS_CONFIG_FILE)
+    console.log('reduce2')
+    config = yaml.safeLoad(contents)
 
-  reduced = config[matrixName].map((version) -> parseFload(version))
-  reduced.sort((v1, v2) -> v2 - v1)
-  config[matrixName] = reduced[0] or config[matrixName][0]
+    console.log('reduce3')
+    reduced = config[matrixName].map((version) -> parseFload(version))
+    console.log('reduce4')
+    reduced.sort((v1, v2) -> v2 - v1)
+    console.log('reduce5')
+    config[matrixName] = reduced[0] or config[matrixName][0]
 
-  fs.writeFileSync(TRAVIS_CONFIG_FILE, yaml.dump(config), 'utf-8')
+    console.log('reduce6')
+    fs.writeFileSync(TRAVIS_CONFIG_FILE, yaml.dump(config), 'utf-8')
+  catch e
+    console.error(e.message, e)
+    process.exit(1)
 
 
 # Retrieves full commit message.
@@ -265,7 +275,7 @@ abortIfNotTriggered(testedNodeVersion, testedCommit, pullRequestId)
 requireTravisCli()
 
 
-ensureGitAuthor()
+ensureGitAuthor(testedCommit)
 ensureGitOrigin()
 
 
